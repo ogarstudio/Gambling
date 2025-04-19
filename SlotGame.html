@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Daily Slots 🎰</title>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      background: #111;
+      color: #fff;
+      padding: 30px;
+    }
+    input, button {
+      font-size: 1.2em;
+      padding: 10px;
+      margin: 5px;
+    }
+    #reel {
+      font-size: 3em;
+      margin: 20px;
+      height: 1em;
+    }
+    #spinButton[disabled] {
+      opacity: 0.5;
+    }
+    #loginWarning {
+      color: red;
+      font-size: 1.2em;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎰 Daily Slots</h1>
+
+  <div id="authSection">
+    <input id="email" type="email" placeholder="Email"><br>
+    <input id="password" type="password" placeholder="Password"><br>
+    <button onclick="signup()">Sign Up</button>
+    <button onclick="login()">Login</button>
+    <button onclick="logout()">Logout</button>
+    <p id="status">Not logged in</p>
+    <p id="loginWarning" style="display: none;">Please log in to play the game!</p>
+  </div>
+
+  <div id="gameSection" style="display: none;">
+    <h2>🎰 Slot Machine</h2>
+    <p id="coins">Coins: loading...</p>
+    <button id="spinButton" onclick="spin()" disabled>🎲 Spin (10 coins)</button>
+    <div id="reel">❓ ❓ ❓</div>
+    <p id="result"></p>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBU0wJQsnSxlm7CeBBUhIwZTdohVrc_x9o",
+      authDomain: "slotgame-cd72e.firebaseapp.com",
+      projectId: "slotgame-cd72e",
+      storageBucket: "slotgame-cd72e.appspot.com",
+      messagingSenderId: "153503325097",
+      appId: "1:153503325097:web:062c79aec221b128f7c2b8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let currentUserRef = null;
+    let currentCoins = 0;
+    let canSpin = true;
+
+    function updateCoinsDisplay() {
+      document.getElementById("coins").innerText = `Coins: ${currentCoins}`;
+    }
+
+    function signup() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(() => document.getElementById("status").innerText = "Signed up!")
+        .catch(error => document.getElementById("status").innerText = error.message);
+    }
+
+    function login() {
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => document.getElementById("status").innerText = "Logged in!")
+        .catch(error => document.getElementById("status").innerText = error.message);
+    }
+
+    function logout() {
+      auth.signOut().then(() => {
+        document.getElementById("status").innerText = "Logged out";
+        document.getElementById("gameSection").style.display = "none";
+        document.getElementById("loginWarning").style.display = "block";
+        document.getElementById("spinButton").disabled = true;
+        currentUserRef = null;
+        currentCoins = 0;
+        updateCoinsDisplay();
+      });
+    }
+
+    function checkOrCreateUserData(user) {
+      const userRef = db.collection("users").doc(user.uid);
+      const today = new Date().toDateString();
+      currentUserRef = userRef;
+
+      userRef.get().then(doc => {
+        if (!doc.exists) {
+          userRef.set({ coins: 50, lastDaily: today }).then(() => {
+            currentCoins = 50;
+            updateCoinsDisplay();
+            document.getElementById("status").innerText = "Welcome! You got 50 coins 🪙";
+          });
+        } else {
+          const data = doc.data();
+          if (data.lastDaily !== today) {
+            const newCoins = data.coins + 50;
+            userRef.update({ coins: newCoins, lastDaily: today }).then(() => {
+              currentCoins = newCoins;
+              updateCoinsDisplay();
+              document.getElementById("status").innerText = `Daily bonus! You now have ${newCoins} coins 💰`;
+            });
+          } else {
+            currentCoins = data.coins;
+            updateCoinsDisplay();
+            document.getElementById("status").innerText = `Welcome back! You have ${data.coins} coins 🪙`;
+          }
+        }
+      });
+
+      document.getElementById("gameSection").style.display = "block";
+      document.getElementById("loginWarning").style.display = "none";
+      document.getElementById("spinButton").disabled = false;
+    }
+
+    function spin() {
+      if (!auth.currentUser || !currentUserRef) {
+        document.getElementById("result").innerText = "You must be logged in!";
+        return;
+      }
+
+      if (!canSpin || currentCoins < 10) {
+        document.getElementById("result").innerText = currentCoins < 10 ? "Not enough coins!" : "";
+        return;
+      }
+
+      canSpin = false;
+      document.getElementById("spinButton").disabled = true;
+      document.getElementById("result").innerText = "Spinning...";
+
+      const symbols = ["🍒", "🍋", "🍉", "⭐", "💎"];
+      const r1 = symbols[Math.floor(Math.random() * symbols.length)];
+      const r2 = symbols[Math.floor(Math.random() * symbols.length)];
+      const r3 = symbols[Math.floor(Math.random() * symbols.length)];
+
+      let spinIndex = 0;
+      const spinInterval = setInterval(() => {
+        const s1 = symbols[Math.floor(Math.random() * symbols.length)];
+        const s2 = symbols[Math.floor(Math.random() * symbols.length)];
+        const s3 = symbols[Math.floor(Math.random() * symbols.length)];
+        document.getElementById("reel").innerText = `${s1} ${s2} ${s3}`;
+        spinIndex++;
+        if (spinIndex >= 10) {
+          clearInterval(spinInterval);
+          document.getElementById("reel").innerText = `${r1} ${r2} ${r3}`;
+
+          let win = 0;
+          if (r1 === r2 && r2 === r3) {
+            win = 50;
+          } else if (r1 === r2 || r2 === r3 || r1 === r3) {
+            win = 20;
+          }
+
+          currentCoins -= 10;
+          currentCoins += win;
+
+          currentUserRef.update({ coins: currentCoins }).then(() => {
+            updateCoinsDisplay();
+            document.getElementById("result").innerText = win > 0 ? `You won ${win} coins! 🎉` : "No match 😢";
+            setTimeout(() => {
+              canSpin = true;
+              document.getElementById("spinButton").disabled = false;
+            }, 3000);
+          });
+        }
+      }, 100);
+    }
+
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        checkOrCreateUserData(user);
+      } else {
+        document.getElementById("status").innerText = "Not logged in";
+        document.getElementById("coins").innerText = "Coins: -";
+        document.getElementById("gameSection").style.display = "none";
+        document.getElementById("loginWarning").style.display = "block";
+        document.getElementById("spinButton").disabled = true;
+      }
+    });
+  </script>
+</body>
+</html>
